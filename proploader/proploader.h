@@ -6,6 +6,14 @@
 #include "os_type.h"
 #include "httpd.h"
 
+#define PROP_DBG
+
+#ifdef PROP_DBG
+#define DBG(format, ...) os_printf(format, ## __VA_ARGS__)
+#else
+#define DBG(format, ...)
+#endif
+
 typedef enum {
     ltShutdown = 0,
     ltDownloadAndRun = (1 << 0),
@@ -14,19 +22,19 @@ typedef enum {
 } LoadType;
 
 typedef enum {
-    stIdle,
-    stReset1,
-    stReset2,
-    stTxHandshake,
-    stRxHandshake,
-    stVerifyChecksum,
-    stFastStartAck,
-    stFastData,
-    stFastDataAck,
-    stVerifyRAMAck,
-    stProgramVerifyEEPROMAck,
-    stReadyToLaunchAck,
-    stMAX
+/*  0 */    stIdle,
+/*  1 */    stReset1,
+/*  2 */    stReset2,
+/*  3 */    stTxHandshake,
+/*  4 */    stRxHandshake,
+/*  5 */    stVerifyChecksum,
+/*  6 */    stStartAck,
+/*  7 */    stData,
+/*  8 */    stDataAck,
+/*  9 */    stVerifyRAMAck,
+/* 10 */    stProgramVerifyEEPROMAck,
+/* 11 */    stReadyToLaunchAck,
+            stMAX
 } LoadState;
 
 typedef struct {

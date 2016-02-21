@@ -113,7 +113,7 @@ void ICACHE_FLASH_ATTR fplData(PropellerConnection *connection, uint8_t *payload
 {
     TransmitPacket(connection, payload, payloadSize, PACKET_TIMEOUT);
     connection->expectedID = connection->packetID - 1;
-    connection->state = stFastDataAck;
+    connection->state = stDataAck;
 }
 
 void ICACHE_FLASH_ATTR fplUpdateChecksum(PropellerConnection *connection, uint8_t *payload, int payloadSize)
@@ -127,6 +127,7 @@ void ICACHE_FLASH_ATTR fplVerifyRAM(PropellerConnection *connection)
 {
     TransmitPacket(connection, verifyRAM, sizeof(verifyRAM), PACKET_TIMEOUT);
     connection->expectedID = -connection->checksum;
+    DBG("Expecting %d, (%d)\n", (int)connection->expectedID, sizeof(int));
     connection->state = stVerifyRAMAck;
 }
 
