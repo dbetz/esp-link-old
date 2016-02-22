@@ -344,6 +344,7 @@ static void ICACHE_FLASH_ATTR readCallback(char *buf, short length)
     
     os_timer_disarm(&connection->timer);
     
+    
     switch (connection->state) {
     case stIdle:
     case stReset1:
@@ -383,6 +384,7 @@ static void ICACHE_FLASH_ATTR readCallback(char *buf, short length)
                 os_timer_arm(&connection->timer, STARTUP_TIMEOUT, 0);
                 connection->bytesRemaining = sizeof(fplResponse);
                 connection->bytesReceived = 0;
+                connection->packetTag = 0;
             }
         }
         else {
@@ -453,6 +455,7 @@ static void ICACHE_FLASH_ATTR readCallback(char *buf, short length)
     default:
         break;
     }
+    DBG(" --> %d\n", connection->state);
 }
 
 
