@@ -90,6 +90,7 @@ int ICACHE_FLASH_ATTR cgiPropLoadBegin(HttpdConnData *connData)
     
     if (connection->state != stIdle) {
         errorResponse(connData, 400, "Transfer already in progress\r\n");
+        abortLoading(connection);
         return HTTPD_CGI_DONE;
     }
     connData->cgiPrivData = connection;
