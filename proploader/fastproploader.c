@@ -8,9 +8,7 @@
 
 #define FAILSAFE_TIMEOUT    2.0         /* Number of seconds to wait for a packet from the host */
 #define MAX_RX_SENSE_ERROR  23          /* Maximum number of cycles by which the detection of a start bit could be off (as affected by the Loader code) */
-// size of data buffer in the second-stage loader
-#define MAX_PACKET_SIZE     1024
-
+#define MAX_PACKET_SIZE     1024        /* size of data buffer in the second-stage loader */
 
 // Offset (in bytes) from end of Loader Image pointing to where most host-initialized values exist.
 // Host-Initialized values are: Initial Bit Time, Final Bit Time, 1.5x Bit Time, Failsafe timeout,
@@ -127,7 +125,6 @@ void ICACHE_FLASH_ATTR fplVerifyRAM(PropellerConnection *connection)
 {
     TransmitPacket(connection, verifyRAM, sizeof(verifyRAM), PACKET_TIMEOUT);
     connection->expectedID = -connection->checksum;
-    DBG("Expecting %d, (%d)\n", (int)connection->expectedID, sizeof(int));
     connection->state = stVerifyRAMAck;
 }
 

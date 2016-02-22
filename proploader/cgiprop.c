@@ -50,6 +50,8 @@ static const char *stateNames[] = {
 
 static void getLoadParameters(HttpdConnData *connData);
 static void startLoading(PropellerConnection *connection, const uint8_t *image, int imageSize);
+static void finishLoading(PropellerConnection *connection);
+static void abortLoading(PropellerConnection *connection);
 static void httpdSendResponse(HttpdConnData *connData, int code, char *message);
 static void timerCallback(void *data);
 static void readCallback(char *buf, short length);
@@ -121,6 +123,7 @@ int ICACHE_FLASH_ATTR cgiPropLoadData(HttpdConnData *connData)
     
     if (connection->state != stData) {
         errorResponse(connData, 400, "Not ready for a data transfer\r\n");
+        abortLoading(connection);
         return HTTPD_CGI_DONE;
     }
     connData->cgiPrivData = connection;
@@ -128,6 +131,7 @@ int ICACHE_FLASH_ATTR cgiPropLoadData(HttpdConnData *connData)
     
     if (connData->post->buffLen == 0) {
         errorResponse(connData, 400, "No data to load\r\n");
+        abortLoading(connection);
         return HTTPD_CGI_DONE;
     }
     
@@ -146,10 +150,12 @@ int ICACHE_FLASH_ATTR cgiPropLoadEnd(HttpdConnData *connData)
     
     if (connection->state != stData) {
         errorResponse(connData, 400, "Not ready for a data transfer\r\n");
+        abortLoading(connection);
         return HTTPD_CGI_DONE;
     }
     else if (connection->packetID != 0) {
         errorResponse(connData, 400, "More data expected\r\n");
+        abortLoading(connection);
         return HTTPD_CGI_DONE;
     }
     connData->cgiPrivData = connection;
@@ -168,6 +174,7 @@ int ICACHE_FLASH_ATTR cgiPropLoadEnd(HttpdConnData *connData)
         connection->loadType = ltDownloadAndProgram;
     else {
         errorResponse(connData, 400, "Unknown command\r\n");
+        abortLoading(connection);
         return HTTPD_CGI_DONE;
     }
     
@@ -248,6 +255,13 @@ static void ICACHE_FLASH_ATTR finishLoading(PropellerConnection *connection)
 {
     uart0_baud(connection->finalBaudRate);
     programmingCB = NULL;
+    myConnection.state = stIdle;
+}
+
+static void ICACHE_FLASH_ATTR abortLoading(PropellerConnection *connection)
+{
+    programmingCB = NULL;
+    myConnection.state = stIdle;
 }
 
 static void ICACHE_FLASH_ATTR httpdSendResponse(HttpdConnData *connData, int code, char *message)
@@ -285,7 +299,7 @@ static void ICACHE_FLASH_ATTR timerCallback(void *data)
         break;
     case stRxHandshake:
         httpdSendResponse(connection->connData, 400, "RX handshake timeout\r\n");
-        connection->state = stIdle;
+        abortLoading(connection);
         break;
     case stVerifyChecksum:
         if (connection->retriesRemaining > 0) {
@@ -295,28 +309,28 @@ static void ICACHE_FLASH_ATTR timerCallback(void *data)
         }
         else {
             httpdSendResponse(connection->connData, 400, "Checksum timeout\r\n");
-            connection->state = stIdle;
+            abortLoading(connection);
         }
         break;
     case stStartAck:
         httpdSendResponse(connection->connData, 400, "Second-stage loader startup timeout\r\n");
-        connection->state = stIdle;
+        abortLoading(connection);
         break;
     case stDataAck:
         httpdSendResponse(connection->connData, 400, "Second-stage loader data timeout\r\n");
-        connection->state = stIdle;
+        abortLoading(connection);
         break;
     case stVerifyRAMAck:
         httpdSendResponse(connection->connData, 400, "Second-stage verify RAM timeout\r\n");
-        connection->state = stIdle;
+        abortLoading(connection);
         break;
     case stProgramVerifyEEPROMAck:
         httpdSendResponse(connection->connData, 400, "Second-stage program and verify EEPROM timeout\r\n");
-        connection->state = stIdle;
+        abortLoading(connection);
         break;
     case stReadyToLaunchAck:
         httpdSendResponse(connection->connData, 400, "Second-stage ready to launch timeout\r\n");
-        connection->state = stIdle;
+        abortLoading(connection);
         break;
     default:
         break;
@@ -350,19 +364,21 @@ static void ICACHE_FLASH_ATTR readCallback(char *buf, short length)
                 }
                 else {
                     httpdSendResponse(connection->connData, 400, "Load image failed\r\n");
-                    connection->state = stIdle;
+                    abortLoading(connection);
                 }
             }
             else {
                 httpdSendResponse(connection->connData, 400, "RX handshake failed\r\n");
-                connection->state = stIdle;
+                abortLoading(connection);
             }
         }
         break;
     case stVerifyChecksum:
         if (buf[0] == 0xFE) {
-            if ((connection->state = connection->stateAfterLoadFinishes) == stIdle)
+            if ((connection->state = connection->stateAfterLoadFinishes) == stIdle) {
                 httpdSendResponse(connection->connData, 200, "");
+                finishLoading(connection);
+            }
             else {
                 os_timer_arm(&connection->timer, STARTUP_TIMEOUT, 0);
                 connection->bytesRemaining = sizeof(fplResponse);
@@ -371,7 +387,7 @@ static void ICACHE_FLASH_ATTR readCallback(char *buf, short length)
         }
         else {
             httpdSendResponse(connection->connData, 400, "Checksum error\r\n");
-            connection->state = stIdle;
+            abortLoading(connection);
         }
         break;
     case stStartAck:
@@ -385,24 +401,24 @@ static void ICACHE_FLASH_ATTR readCallback(char *buf, short length)
         connection->bytesReceived += cnt;
         if ((connection->bytesRemaining -= cnt) == 0) {
             if (fplGetLong(&connection->buffer[4]) != connection->packetTag) {
-                char buf[50];
-                os_sprintf(buf, "Fast loader wrong tag: expected %d, got %d, state %d\r\n",
+                char buf[80];
+                os_sprintf(buf, "FPL wrong tag: expected %d, got %d, state %d\r\n",
                            (int)connection->packetTag,
                            (int)fplGetLong(&connection->buffer[4]),
 //                           stateName(connection->state));
                            connection->state);
                 httpdSendResponse(connection->connData, 400, buf);
-                connection->state = stIdle;
+                abortLoading(connection);
             }
             else if (fplGetLong(&connection->buffer[0]) != connection->expectedID) {
-                char buf[50];
-                os_sprintf(buf, "Fast loader wrong id: expected %d, got %d, state %d\r\n",
+                char buf[80];
+                os_sprintf(buf, "FPL wrong id: expected %d, got %d, state %d\r\n",
                            (int)connection->expectedID,
                            (int)fplGetLong(&connection->buffer[0]),
 //                           stateName(connection->state));
                            connection->state);
                 httpdSendResponse(connection->connData, 400, buf);
-                connection->state = stIdle;
+                abortLoading(connection);
             }
             else {
                 connection->packetID = connection->expectedID;
