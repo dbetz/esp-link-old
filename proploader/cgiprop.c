@@ -345,7 +345,6 @@ static void ICACHE_FLASH_ATTR readCallback(char *buf, short length)
     
     os_timer_disarm(&connection->timer);
     
-    
     switch (connection->state) {
     case stIdle:
     case stReset1:
@@ -428,9 +427,11 @@ static void ICACHE_FLASH_ATTR readCallback(char *buf, short length)
                 switch (connection->state) {
                 case stStartAck:
                     uart0_baud(connection->secondStageBaudRate);
+                    httpdSendResponse(connection->connData, 200, "");
                     connection->state = stData;
                     break;
                 case stDataAck:
+                    httpdSendResponse(connection->connData, 200, "");
                     connection->state = stData;
                     break;
                 case stVerifyRAMAck:
@@ -444,19 +445,18 @@ static void ICACHE_FLASH_ATTR readCallback(char *buf, short length)
                     break;
                 case stReadyToLaunchAck:
                     fplLaunchNow(connection);
+                    httpdSendResponse(connection->connData, 200, "");
                     finishLoading(connection);
                     break;
                 default:
                     break;
                 }
-                httpdSendResponse(connection->connData, 200, "");
             }
         }
         break;
     default:
         break;
     }
-    DBG(" --> %d\n", connection->state);
 }
 
 
